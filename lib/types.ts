@@ -2,7 +2,7 @@
  * Type definitions for the application
  */
 
-import type { Stripe } from "stripe";
+
 
 /**
  * Subscription status types

@@ -37,6 +37,10 @@ export const env = {
   STRIPE_PRO_MONTHLY_PRICE_ID: getEnvVar("STRIPE_PRO_MONTHLY_PRICE_ID"),
   STRIPE_PRO_ANNUAL_PRICE_ID: getOptionalEnvVar("STRIPE_PRO_ANNUAL_PRICE_ID"),
 
+  // Resend (Email)
+  RESEND_API_KEY: getEnvVar("RESEND_API_KEY"),
+  RESEND_FROM_EMAIL: getOptionalEnvVar("RESEND_FROM_EMAIL") || "onboarding@resend.dev",
+
   // Node environment
   NODE_ENV: process.env.NODE_ENV || "development",
   isDevelopment: process.env.NODE_ENV === "development",

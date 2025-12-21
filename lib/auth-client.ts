@@ -17,12 +17,20 @@ if (!baseURL) {
 
 export const authClient = createAuthClient({
   baseURL,
-  plugins: [stripeClient(), organizationClient()],
+  plugins: [
+    stripeClient({
+      subscription: true, // Enable subscription methods
+    }),
+    organizationClient(),
+  ],
   // You can pass client configuration here
 });
 
-export const { signIn, signUp, signOut, useSession } = authClient;
-// Stripe subscription methods are available via Better Auth's API
-// Use authClient.$fetch("/subscription/upgrade", {...}) or similar endpoints
-// See Better Auth stripe plugin documentation for available endpoints
-export const { organization: orgClient } = authClient;
+export const {
+  signIn,
+  signUp,
+  signOut,
+  useSession,
+  subscription,
+  organization: orgClient,
+} = authClient;
