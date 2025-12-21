@@ -1,9 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useSession } from '@/lib/auth-client';
-import { orgClient } from '@/lib/auth-client';
+import { useInvitation, useAcceptInvitation, useRejectInvitation } from '@/hooks/use-user-invitations';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -11,136 +10,65 @@ import { Building2, CheckCircle } from 'lucide-react';
 import { LoadingSkeleton } from '@/components/shared/loading-skeleton';
 import { ErrorState } from '@/components/shared/error-state';
 
-interface Invitation {
-  id: string;
-  email: string;
-  role: string;
-  organizationId: string;
-  inviterId: string;
-  status: string;
-  inviter?: {
-    user: {
-      name?: string;
-      email: string;
-    };
-  };
-}
 
-interface Organization {
-  id: string;
-  name: string;
-}
 
 export default function AcceptInvitationPage() {
   const params = useParams();
   const router = useRouter();
-  const { data: session } = useSession();
-  const [invitation, setInvitation] = useState<Invitation | null>(null);
-  const [organization, setOrganization] = useState<Organization | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isAccepting, setIsAccepting] = useState(false);
-  const [isRejecting, setIsRejecting] = useState(false);
-  const [error, setError] = useState('');
+  const invitationId = params.id as string;
+
+  // Use new TanStack Query hooks
+  const { data: invitation, isLoading, error } = useInvitation(invitationId);
+  const acceptInvitationMutation = useAcceptInvitation();
+  const rejectInvitationMutation = useRejectInvitation();
+
+  // Local UI state
   const [modalError, setModalError] = useState('');
   const [success, setSuccess] = useState('');
 
-  const invitationId = params.id as string;
+  const handleAccept = () => {
+    if (!invitation) return;
 
-  useEffect(() => {
-    const fetchInvitation = async () => {
-      if (!invitationId) return;
-
-      try {
-        setIsLoading(true);
-        const { data, error } = await orgClient.getInvitation({
-          query: { id: invitationId },
-        });
-
-        if (error) {
-          setError('Invitation not found or expired');
-          return;
-        }
-
-        setInvitation(data);
-
-        // For now, we'll display the invitation without detailed org/inviter info
-        // This can be enhanced later with proper organization fetching
-        setOrganization({ id: data.organizationId, name: 'Organization' });
-      } catch {
-        setError('Failed to load invitation');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchInvitation();
-  }, [invitationId]);
-
-  const handleAccept = async () => {
-    if (!session?.user) {
-      // Redirect to login if not authenticated
-      router.push(`/login?redirect=/accept-invitation/${invitationId}`);
-      return;
-    }
-
-    if (invitation?.status !== 'pending') {
-      setModalError('This invitation is no longer valid.');
-      return;
-    }
-
-    setIsAccepting(true);
     setModalError('');
-    try {
-      const { error } = await orgClient.acceptInvitation({
-        invitationId,
-      });
-
-      if (error) {
-        setModalError(error.message || 'Failed to accept invitation');
-        return;
+    acceptInvitationMutation.mutate(
+      { invitationId },
+      {
+        onSuccess: () => {
+          setSuccess('Invitation accepted successfully! Redirecting...');
+          setTimeout(() => {
+            router.push('/dashboard');
+          }, 2000);
+        },
+        onError: (error) => {
+          console.error('Failed to accept invitation:', error);
+          setModalError(error.message || 'Failed to accept invitation. Please try again.');
+        },
       }
-
-      setSuccess('Successfully joined the organization!');
-      // Redirect to organization page after a delay
-      setTimeout(() => {
-        router.push(`/dashboard/organizations/${invitation?.organizationId}`);
-      }, 2000);
-    } catch {
-      setModalError('Failed to accept invitation');
-    } finally {
-      setIsAccepting(false);
-    }
+    );
   };
 
-  const handleReject = async () => {
-    if (!session?.user) {
-      setModalError('You must be logged in to reject invitations');
-      return;
-    }
+  const handleReject = () => {
+    if (!invitation) return;
 
-    setIsRejecting(true);
     setModalError('');
-    try {
-      const { error } = await orgClient.rejectInvitation({
-        invitationId,
-      });
-
-      if (error) {
-        setModalError(error.message || 'Failed to reject invitation');
-        return;
+    rejectInvitationMutation.mutate(
+      { invitationId },
+      {
+        onSuccess: () => {
+          setSuccess('Invitation rejected.');
+          setTimeout(() => {
+            router.push('/dashboard');
+          }, 2000);
+        },
+        onError: (error) => {
+          console.error('Failed to reject invitation:', error);
+          setModalError(error.message || 'Failed to reject invitation. Please try again.');
+        },
       }
-
-      setSuccess('Invitation rejected');
-      // Redirect to dashboard after a delay
-      setTimeout(() => {
-        router.push('/dashboard');
-      }, 2000);
-    } catch {
-      setModalError('Failed to reject invitation');
-    } finally {
-      setIsRejecting(false);
-    }
+    );
   };
+
+
 
   if (isLoading) {
     return (
@@ -159,7 +87,7 @@ export default function AcceptInvitationPage() {
             <p className="text-muted-foreground mt-2">Join your team workspace</p>
           </div>
           <ErrorState
-            message={error}
+            message={error?.message}
             type="page"
             onRetry={() => window.location.reload()}
             retryLabel="Try Again"
@@ -178,7 +106,7 @@ export default function AcceptInvitationPage() {
           </div>
           <CardTitle className="text-2xl">Team Invitation</CardTitle>
             <CardDescription>
-              You&apos;ve been invited to join {organization?.name || 'an organization'}
+              You&apos;ve been invited to join an organization
             </CardDescription>
         </CardHeader>
 
@@ -187,7 +115,7 @@ export default function AcceptInvitationPage() {
             <div className="bg-muted p-4 rounded-lg">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium">Organization</span>
-                <span className="text-sm text-muted-foreground">{organization?.name}</span>
+                <span className="text-sm text-muted-foreground">Organization</span>
               </div>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium">Your Role</span>
@@ -195,16 +123,16 @@ export default function AcceptInvitationPage() {
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">Invited By</span>
-                <span className="text-sm text-muted-foreground">{invitation.inviter?.user?.name || invitation.inviter?.user?.email}</span>
+                <span className="text-sm text-muted-foreground">Organization Admin</span>
               </div>
             </div>
-          ) : invitation?.status === 'cancelled' ? (
+          ) : invitation?.status === 'canceled' ? (
             <div className="bg-red-50 border border-red-200 p-4 rounded-lg">
               <div className="flex items-center space-x-2 text-red-700">
                 <span className="text-sm font-medium">This invitation has been cancelled</span>
               </div>
               <p className="text-sm text-red-600 mt-2">
-                The invitation to join {organization?.name} has been cancelled by the organization owner.
+                The invitation has been cancelled by the organization owner.
               </p>
              </div>
            ) : (
@@ -220,7 +148,7 @@ export default function AcceptInvitationPage() {
 
           {error && (
             <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
+              <AlertDescription>{error?.message}</AlertDescription>
             </Alert>
           )}
 
@@ -242,8 +170,7 @@ export default function AcceptInvitationPage() {
                 <Button
                   onClick={handleAccept}
                   className="flex-1"
-                  loading={isAccepting}
-                  disabled={isRejecting}
+                  disabled={acceptInvitationMutation.isPending || rejectInvitationMutation.isPending}
                 >
                   Accept Invitation
                 </Button>
@@ -251,8 +178,7 @@ export default function AcceptInvitationPage() {
                   variant="outline"
                   onClick={handleReject}
                   className="flex-1"
-                  loading={isRejecting}
-                  disabled={isAccepting}
+                  disabled={acceptInvitationMutation.isPending || rejectInvitationMutation.isPending}
                 >
                   Decline
                 </Button>

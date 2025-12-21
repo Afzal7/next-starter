@@ -1,34 +1,16 @@
 /**
  * Next.js middleware for authentication
- * Protects routes defined in the matcher configuration
- * Uses Better Auth's built-in getSession API
+ * REMOVED: Middleware-based auth is not secure in Next.js App Router
  *
- * Note: For Next.js 16+, consider migrating to proxy.ts (see Better Auth docs)
- * This middleware uses Node.js runtime for full session validation
+ * Authentication is now handled at the page/layout level using Better Auth's
+ * client-side session management for proper security and SSR compatibility.
+ *
+ * See: https://www.better-auth.com/docs/concepts/middleware
  */
 
-import { auth } from "@/lib/auth";
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
-import { headers } from "next/headers";
-
-export async function middleware(request: NextRequest) {
-  // Use Better Auth's built-in getSession API
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
-
-  // THIS IS NOT SECURE!
-  // This is the recommended approach to optimistically redirect users
-  // We recommend handling auth checks in each page/route
-  if (!session) {
-    return NextResponse.redirect(new URL("/", request.url));
-  }
-
-  return NextResponse.next();
-}
+// Middleware removed for security reasons
+// Auth checks are now handled in dashboard/layout.tsx and individual pages
 
 export const config = {
-  runtime: "nodejs", // Required for auth.api calls
-  matcher: ["/dashboard/:path*", "/settings/:path*"],
+  matcher: [], // No routes protected by middleware
 };

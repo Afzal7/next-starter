@@ -1,3 +1,5 @@
+'use client';
+
 import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
 
@@ -39,7 +41,7 @@ const ProfileDropdown = ({
   align = "end",
 }: Props) => {
   const router = useRouter();
-  const { organization } = useOrganization();
+  const { data: organization } = useOrganization();
 
   const handleLogout = async () => {
     await signOut();

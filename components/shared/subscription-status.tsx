@@ -7,7 +7,7 @@ import { useSubscription } from "@/hooks/use-subscription";
 
 export function SubscriptionStatus() {
   const router = useRouter();
-  const { subscriptionData, loading } = useSubscription();
+  const { data: subscriptionData, isLoading: loading } = useSubscription();
 
   if (loading) {
     return (

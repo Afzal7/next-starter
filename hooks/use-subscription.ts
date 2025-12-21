@@ -1,6 +1,8 @@
+'use client';
+
+import { useQuery } from '@tanstack/react-query'
 import { useSession } from '@/lib/auth-client'
 import { subscription } from '@/lib/auth-client'
-import { useEffect, useState } from 'react'
 
 export interface SubscriptionData {
   subscription?: {
@@ -11,79 +13,80 @@ export interface SubscriptionData {
   isPro?: boolean
 }
 
+/**
+ * Custom hook for fetching user subscription data with caching
+ * Uses TanStack Query for automatic caching, background refetching, and error handling
+ *
+ * @returns Query result with subscription data, loading state, and error handling
+ */
 export function useSubscription() {
   const { data: session } = useSession()
-  const [subscriptionData, setSubscriptionData] = useState<SubscriptionData | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    const fetchSubscription = async () => {
+  return useQuery({
+    queryKey: ['subscription', session?.user?.id],
+    queryFn: async (): Promise<SubscriptionData | null> => {
       if (!session?.user) {
-        setLoading(false)
-        return
+        throw new Error('User not authenticated')
       }
 
-      try {
-        setLoading(true)
-        setError(null)
+      const { data: subscriptions, error } = await subscription.list({
+        query: {
+          referenceId: session.user.id,
+        },
+      })
 
-        const { data: subscriptions, error } = await subscription.list({
-          query: {
-            referenceId: session.user.id,
-          },
-        })
+      if (error) {
+        throw new Error(error.message || 'Failed to fetch subscription')
+      }
 
-        if (error) {
-          setError(error.message || 'Failed to fetch subscription')
-          return
-        }
+      if (!subscriptions || subscriptions.length === 0) {
+        return null
+      }
 
-        // Get the active subscription (or most recent if expired)
-        const activeSubscription = subscriptions.find(
-          sub => sub.status === "active" || sub.status === "trialing"
-        )
+      // Get the active subscription (or most recent if expired)
+      const activeSubscription = subscriptions.find(
+        sub => sub.status === "active" || sub.status === "trialing"
+      )
 
-        // If no active subscription, check for expired/canceled ones
-        const expiredSubscription = subscriptions.find(
-          sub => sub.status === "canceled" && sub.periodEnd && new Date(sub.periodEnd) < new Date()
-        )
+      // If no active subscription, check for expired/canceled ones
+      const expiredSubscription = subscriptions.find(
+        sub => sub.status === "canceled" && sub.periodEnd && new Date(sub.periodEnd) > new Date()
+      )
 
-        setSubscriptionData(activeSubscription ? {
+      if (activeSubscription) {
+        return {
           subscription: {
             status: activeSubscription.status,
             periodEnd: activeSubscription.periodEnd?.toISOString(),
             cancelAtPeriodEnd: activeSubscription.cancelAtPeriodEnd,
           },
           isPro: true,
-        } : expiredSubscription ? {
+        }
+      }
+
+      if (expiredSubscription) {
+        return {
           subscription: {
             status: expiredSubscription.status,
             periodEnd: expiredSubscription.periodEnd?.toISOString(),
             cancelAtPeriodEnd: expiredSubscription.cancelAtPeriodEnd,
           },
           isPro: false,
-        } : null)
-      } catch {
-        setError('Failed to load subscription data')
-      } finally {
-        setLoading(false)
+        }
       }
-    }
 
-    fetchSubscription()
-  }, [session])
-
-  return {
-    subscriptionData,
-    loading,
-    error,
-    refetch: () => {
-      if (session?.user) {
-        // Re-run the effect by updating a dependency
-        setLoading(true)
-        setError(null)
+      return null
+    },
+    enabled: !!session?.user?.id,
+    staleTime: 5 * 60 * 1000, // Consider data fresh for 5 minutes
+    gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
+    retry: (failureCount, error) => {
+      // Don't retry on authentication errors
+      if (error instanceof Error && error.message.includes('not authenticated')) {
+        return false
       }
-    }
-  }
+      // Retry up to 3 times for other errors
+      return failureCount < 3
+    },
+  })
 }

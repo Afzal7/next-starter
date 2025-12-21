@@ -83,7 +83,7 @@ const getSampleMetrics = () => ({
 
 function DashboardContent() {
   const { data: session } = useSession();
-  const { loading: subscriptionLoading } = useSubscription();
+  const { isLoading: subscriptionLoading } = useSubscription();
   const {
     showUpgradeModal: showFeatureUpgradeModal,
     setShowUpgradeModal: setShowFeatureUpgradeModal,

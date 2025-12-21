@@ -1,9 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useParams } from 'next/navigation';
-import { useSession } from '@/lib/auth-client';
-import { orgClient } from '@/lib/auth-client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -16,143 +14,89 @@ import { Mail, UserPlus, Clock } from 'lucide-react';
 import { LoadingSkeleton } from '@/components/shared/loading-skeleton';
 import { ErrorState } from '@/components/shared/error-state';
 import { toast } from 'sonner';
-import type { Organization } from 'better-auth/plugins/organization';
+import { useOrganizationInvitations, useInviteMember, useCancelInvitation, useResendInvitation } from '@/hooks/use-organization-invitations';
+
 
 export default function OrganizationInvitationsPage() {
   const params = useParams();
-  const { data: session } = useSession();
-  const [organization, setOrganization] = useState<Organization | null>(null);
-  const [invitations, setInvitations] = useState<{ id: string; email: string; role: string; status: string; createdAt: Date }[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState('');
+  const orgId = params.id as string;
+
+  // Use new TanStack Query hooks
+  const { data: orgData, isLoading, error } = useOrganizationInvitations(orgId);
+  const inviteMemberMutation = useInviteMember();
+  const cancelInvitationMutation = useCancelInvitation();
+  const resendInvitationMutation = useResendInvitation();
+
+  // Extract data from query result
+  const organization = orgData || null;
+  const invitations = orgData?.invitations || [];
+
+  // Local state for UI
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<'member' | 'admin'>('member');
-  const [isInviting, setIsInviting] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
-  const [cancellingInvite, setCancellingInvite] = useState<string | null>(null);
-  const [resendingInvite, setResendingInvite] = useState<string | null>(null);
 
-  const orgId = params.id as string;
-
-  useEffect(() => {
-    const fetchOrganizationData = async () => {
-      if (!session?.user || !orgId) return;
-
-      try {
-        setIsLoading(true);
-        const { data: orgData, error: orgError } = await orgClient.getFullOrganization({
-          query: { organizationId: orgId }
-        });
-
-        if (orgError) {
-          setError('Organization not found or access denied');
-          return;
-        }
-
-        const { invitations: orgInvitations, ...org } = orgData || {};
-        setOrganization(org);
-        setInvitations(orgInvitations || []);
-      } catch {
-        setError('Failed to load organization');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchOrganizationData();
-  }, [session?.user?.id, session?.user, orgId]);
-
-  const handleCancelInvitation = async (invitationId: string) => {
-    setCancellingInvite(invitationId);
-    try {
-      const { error } = await orgClient.cancelInvitation({ invitationId });
-
-      if (error) {
-        const errorMessage = error.message || 'Failed to cancel invitation';
-        console.error('API error:', error);
-        toast.warning(`Failed to cancel invitation: ${errorMessage}`);
-        return;
-      }
-
-      setInvitations(prev => prev.filter(inv => inv.id !== invitationId));
-      toast.success('Invitation canceled successfully');
-    } catch (error) {
-      console.error('Failed to cancel invitation:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to cancel invitation';
-      toast.warning(`Failed to cancel invitation: ${errorMessage}`);
-    } finally {
-      setCancellingInvite(null);
-    }
+  const handleCancelInvitation = (invitationId: string) => {
+    cancelInvitationMutation.mutate({ invitationId }, {
+      onSuccess: () => {
+        toast.success('Invitation canceled successfully');
+      },
+      onError: (error) => {
+        console.error('Failed to cancel invitation:', error);
+        toast.warning('Failed to cancel invitation. Please try again.');
+      },
+    });
   };
 
-  const handleResendInvitation = async (invitationId: string) => {
-    setResendingInvite(invitationId);
-    try {
-      const invitation = invitations.find(inv => inv.id === invitationId);
-      if (!invitation) return;
+  const handleResendInvitation = (invitationId: string) => {
+    const invitation = invitations.find(inv => inv.id === invitationId);
+    if (!invitation) return;
 
-      const { error } = await orgClient.inviteMember({
+    resendInvitationMutation.mutate(
+      {
+        invitationId,
         email: invitation.email,
-        role: invitation.role as 'member' | 'admin' | 'owner',
+        role: invitation.role as 'member' | 'admin',
         organizationId: orgId,
-        resend: true,
-      });
-
-      if (error) {
-        const errorMessage = error.message || 'Failed to resend invitation';
-        console.error('Email service error:', error);
-        toast.warning(`Failed to resend invitation: ${errorMessage}`);
-        return;
+      },
+      {
+        onSuccess: () => {
+          toast.success('Invitation resent successfully');
+        },
+        onError: (error) => {
+          console.error('Failed to resend invitation:', error);
+          toast.warning('Failed to resend invitation. Please try again.');
+        },
       }
-
-      toast.success('Invitation resent successfully');
-    } catch (error) {
-      console.error('Failed to resend invitation:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to resend invitation';
-      toast.warning(`Failed to resend invitation: ${errorMessage}`);
-    } finally {
-      setResendingInvite(null);
-    }
+    );
   };
 
-  const handleSendInvitation = async () => {
+  const handleSendInvitation = () => {
     if (!inviteEmail.trim() || !organization) return;
 
-    setIsInviting(true);
     setInviteError(null);
-    try {
-      const { error } = await orgClient.inviteMember({
+    inviteMemberMutation.mutate(
+      {
         email: inviteEmail,
         role: inviteRole,
         organizationId: organization.id,
-      });
-
-      if (error) {
-        const errorMessage = error.message || 'Failed to send invitation';
-        console.error('Email service error:', error);
-        setInviteError(errorMessage);
-        toast.warning(`Failed to send invitation: ${errorMessage}`);
-        return;
+      },
+      {
+        onSuccess: () => {
+          setInviteEmail('');
+          setInviteRole('member');
+          setShowInviteModal(false);
+          toast.success('Invitation sent successfully');
+        },
+        onError: (error) => {
+          console.error('Failed to send invitation:', error);
+          const errorMessage = error instanceof Error ? error.message : 'Failed to send invitation';
+          setInviteError(errorMessage);
+          toast.warning(`Failed to send invitation: ${errorMessage}`);
+        },
       }
-
-      const { data: inviteData } = await orgClient.listInvitations({
-        query: { organizationId: organization.id },
-      });
-      setInvitations(inviteData || []);
-
-      setInviteEmail('');
-      setInviteRole('member');
-      setShowInviteModal(false);
-      toast.success('Invitation sent successfully');
-    } catch (error) {
-      console.error('Failed to send invitation:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to send invitation';
-      setInviteError(errorMessage);
-      toast.warning(`Failed to send invitation: ${errorMessage}`);
-    } finally {
-      setIsInviting(false);
-    }
+    );
   };
 
   if (isLoading) {
@@ -167,7 +111,7 @@ export default function OrganizationInvitationsPage() {
     return (
       <div className="space-y-6">
         <ErrorState
-          message={error || 'This organization may not exist or you may not have access.'}
+          message={error?.message || 'This organization may not exist or you may not have access.'}
           type="page"
           onRetry={() => window.location.reload()}
           retryLabel="Try Again"
@@ -238,21 +182,21 @@ export default function OrganizationInvitationsPage() {
                       size="sm"
                       variant="outline"
                       onClick={() => handleResendInvitation(invitation.id)}
-                      disabled={resendingInvite === invitation.id}
+                      disabled={resendInvitationMutation.isPending}
                     >
-                      {resendingInvite === invitation.id ? 'Sending...' : 'Resend'}
+                      {resendInvitationMutation.isPending ? 'Sending...' : 'Resend'}
                     </Button>
                     <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={cancellingInvite === invitation.id}
-                          className="text-destructive hover:text-destructive"
-                        >
-                          {cancellingInvite === invitation.id ? 'Canceling...' : 'Cancel'}
-                        </Button>
-                      </AlertDialogTrigger>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={cancelInvitationMutation.isPending}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            {cancelInvitationMutation.isPending ? 'Canceling...' : 'Cancel'}
+                          </Button>
+                        </AlertDialogTrigger>
                       <AlertDialogContent>
                         <AlertDialogHeader>
                           <AlertDialogTitle>Cancel Invitation</AlertDialogTitle>
@@ -296,7 +240,7 @@ export default function OrganizationInvitationsPage() {
                 placeholder="member@example.com"
                 value={inviteEmail}
                 onChange={(e) => setInviteEmail(e.target.value)}
-                disabled={isInviting}
+                disabled={inviteMemberMutation.isPending}
               />
             </div>
             <div className="space-y-2">
@@ -304,7 +248,7 @@ export default function OrganizationInvitationsPage() {
               <Select
                 value={inviteRole}
                 onValueChange={(value) => setInviteRole(value as 'member' | 'admin')}
-                disabled={isInviting}
+                disabled={inviteMemberMutation.isPending}
               >
                 <SelectTrigger id="role">
                   <SelectValue placeholder="Select role" />
@@ -329,15 +273,15 @@ export default function OrganizationInvitationsPage() {
             <Button
               variant="outline"
               onClick={() => setShowInviteModal(false)}
-              disabled={isInviting}
+              disabled={inviteMemberMutation.isPending}
             >
               Cancel
             </Button>
             <Button
               onClick={handleSendInvitation}
-              disabled={!inviteEmail.trim() || isInviting}
+              disabled={!inviteEmail.trim() || inviteMemberMutation.isPending}
             >
-              {isInviting ? 'Sending...' : 'Send Invitation'}
+              {inviteMemberMutation.isPending ? 'Sending...' : 'Send Invitation'}
             </Button>
           </DialogFooter>
         </DialogContent>

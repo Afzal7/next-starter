@@ -1,9 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useSession } from "@/lib/auth-client";
-import { orgClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -30,32 +28,36 @@ import { Settings, Trash2 } from "lucide-react";
 import { LoadingSkeleton } from "@/components/shared/loading-skeleton";
 import { ErrorState } from "@/components/shared/error-state";
 import { toast } from "sonner";
-
-interface Organization {
-  id: string;
-  name: string;
-  slug: string;
-  metadata?: Record<string, unknown>;
-}
-
-interface Member {
-  id: string;
-  role: string;
-}
+import { useOrganizationMembers } from "@/hooks/use-organization-members";
+import { useUpdateOrganization, useDeleteOrganization } from "@/hooks/use-organization-crud";
 
 export default function OrganizationSettingsPage() {
   const params = useParams();
   const router = useRouter();
-  const { data: session } = useSession();
-  const [organization, setOrganization] = useState<Organization | null>(null);
-  const [currentMember, setCurrentMember] = useState<Member | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
+  const orgId = params.id as string;
 
-  const [name, setName] = useState("");
-  const [slug, setSlug] = useState("");
+  // Use new TanStack Query hooks
+  const { data: orgData, isLoading, error } = useOrganizationMembers(orgId);
+  const updateOrgMutation = useUpdateOrganization();
+  const deleteOrgMutation = useDeleteOrganization();
+
+
+  // Extract data from query result
+  const organization = orgData || null;
+  const members = orgData?.members || [];
+  const currentMember = members.find(m => m.role === 'owner' || m.role === 'admin'); // Simplified
+
+  // Local state for form
+  const [name, setName] = useState(organization?.name || "");
+  const [slug, setSlug] = useState(organization?.slug || "");
+
+  // Update local state when organization data loads
+  React.useEffect(() => {
+    if (organization) {
+      setName(organization.name);
+      setSlug(organization.slug);
+    }
+  }, [organization]);
 
   // Auto-generate slug from name
   const generateSlug = (name: string) => {
@@ -71,107 +73,52 @@ export default function OrganizationSettingsPage() {
     setSlug(generateSlug(newName));
   };
 
-  const orgId = params.id as string;
-
-  useEffect(() => {
-    const fetchOrganization = async () => {
-      if (!session?.user || !orgId) return;
-
-      try {
-        setIsLoading(true);
-        setError("");
-
-        const { data: orgData, error: orgError } =
-          await orgClient.getFullOrganization({
-            query: { organizationId: orgId }
-          });
-        if (orgError) throw new Error(orgError.message);
-
-        const org = orgData;
-        if (!org) throw new Error("Organization not found");
-
-        const { members, ...orgInfo } = org;
-        setOrganization(orgInfo);
-        setName(orgInfo.name);
-        setSlug(orgInfo.slug);
-
-        const member = members?.find((m) => m.userId === session.user.id);
-        setCurrentMember(member || null);
-      } catch (err) {
-        console.error("Failed to fetch organization:", err);
-        setError("Failed to load organization settings");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchOrganization();
-  }, [session, orgId]);
-
-  const handleSave = async () => {
-    if (!organization || !currentMember || currentMember.role !== "owner")
+  const handleSave = () => {
+    if (!organization || !currentMember || currentMember.role !== "owner") {
+      toast.warning("You don't have permission to update organization settings.");
       return;
+    }
 
-    setIsSaving(true);
-    try {
-      const { error } = await orgClient.update({
+    updateOrgMutation.mutate(
+      {
         organizationId: organization.id,
-        data: {
-          name,
-          slug,
+        name: name !== organization.name ? name : undefined,
+        slug: slug !== organization.slug ? slug : undefined,
+      },
+      {
+        onSuccess: () => {
+          toast.success("Organization settings updated successfully");
         },
-      });
-
-      if (error) {
-        toast.warning(`Failed to update organization: ${error.message}`);
-        return;
+        onError: (error) => {
+          console.error("Failed to update organization:", error);
+          toast.warning("Failed to update organization settings");
+        },
       }
-
-      // Update local state
-        // Update local state with supported fields
-        setOrganization((prev) =>
-        prev
-          ? {
-              ...prev,
-              name,
-              slug,
-            }
-          : null
-      );
-
-      toast.success("Organization settings updated successfully");
-    } catch (err) {
-      console.error("Failed to update organization:", err);
-      toast.warning("Failed to update organization settings");
-    } finally {
-      setIsSaving(false);
-    }
+    );
   };
 
-  const handleDelete = async () => {
-    if (!organization || !currentMember || currentMember.role !== "owner")
+  const handleDelete = () => {
+    if (!organization || !currentMember || currentMember.role !== "owner") {
+      toast.warning("You don't have permission to delete this organization.");
       return;
-
-    setIsDeleting(true);
-    try {
-      const { error } = await orgClient.delete({
-        organizationId: organization.id,
-      });
-
-      if (error) {
-        toast.warning(`Failed to delete organization: ${error.message}`);
-        return;
-      }
-
-      toast.success("Organization deleted successfully");
-      router.push("/dashboard");
-    } catch (err) {
-      console.error("Failed to delete organization:", err);
-      toast.warning("Failed to delete organization");
-    } finally {
-      setIsDeleting(false);
     }
+
+    deleteOrgMutation.mutate(
+      { organizationId: organization.id },
+      {
+        onSuccess: () => {
+          toast.success("Organization deleted successfully");
+          router.push("/dashboard");
+        },
+        onError: (error) => {
+          console.error("Failed to delete organization:", error);
+          toast.warning("Failed to delete organization");
+        },
+      }
+    );
   };
+
+
 
   if (isLoading) {
     return (
@@ -182,7 +129,7 @@ export default function OrganizationSettingsPage() {
   }
 
   if (error) {
-    return <ErrorState message={error} />;
+    return <ErrorState message={error.message} />;
   }
 
   if (!organization || !currentMember) {
@@ -245,9 +192,9 @@ export default function OrganizationSettingsPage() {
             {canEdit && (
               <Button
                 onClick={handleSave}
-                disabled={isSaving}
+                disabled={updateOrgMutation.isPending}
               >
-                {isSaving ? "Saving..." : "Save Changes"}
+                {updateOrgMutation.isPending ? "Saving..." : "Save Changes"}
               </Button>
             )}
           </CardContent>
@@ -289,10 +236,9 @@ export default function OrganizationSettingsPage() {
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
                     <AlertDialogAction
                       onClick={handleDelete}
-                      disabled={isDeleting}
-                      className="bg-destructive hover:bg-destructive/90"
+                      disabled={deleteOrgMutation.isPending}
                     >
-                      {isDeleting ? "Deleting..." : "Delete Organization"}
+                      {deleteOrgMutation.isPending ? "Deleting..." : "Delete Organization"}
                     </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>

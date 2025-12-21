@@ -30,8 +30,9 @@ import { DashboardBreadcrumb } from "@/components/shared/dashboard-breadcrumb";
 import { SubscriptionStatus } from "@/components/shared/subscription-status";
 import { useOrganizationContext } from "@/hooks/use-organization-context";
 import { useOrganization } from "@/hooks/use-organization";
-import { usePathname } from "next/navigation";
+import { usePathname, redirect } from "next/navigation";
 import { useSession } from "@/lib/auth-client";
+import { DashboardErrorBoundary } from "@/components/error-boundary";
 import { FadeInRight } from "@/components/animations/fade-in";
 
 export default function DashboardLayout({
@@ -41,11 +42,30 @@ export default function DashboardLayout({
 }) {
   const orgContext = useOrganizationContext();
   const pathname = usePathname();
-  const { data: session } = useSession();
-  const { organization: userOrg } = useOrganization();
+  const { data: session, isPending } = useSession();
+  const { data: userOrg } = useOrganization();
+
+  // Secure authentication check - redirect if not authenticated
+  if (!isPending && !session?.user) {
+    // Use Next.js redirect for server-side redirects
+    redirect('/');
+  }
+
+  // Show loading state while checking authentication
+  if (isPending) {
+    return (
+      <div className="flex min-h-dvh w-full items-center justify-center">
+        <div className="text-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="flex min-h-dvh w-full">
+    <DashboardErrorBoundary>
+      <div className="flex min-h-dvh w-full">
       <SidebarProvider>
         <Sidebar>
           <SidebarContent>
@@ -182,7 +202,7 @@ export default function DashboardLayout({
                 />
                 <DashboardBreadcrumb
                   orgContext={orgContext}
-                  userOrg={userOrg}
+                  userOrg={userOrg ?? null}
                 />
               </div>
                <div className="flex items-center gap-3">
@@ -216,6 +236,7 @@ export default function DashboardLayout({
           </footer>
         </div>
       </SidebarProvider>
-    </div>
+      </div>
+    </DashboardErrorBoundary>
   );
 }
