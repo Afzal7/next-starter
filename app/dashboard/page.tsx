@@ -21,7 +21,7 @@
 "use client";
 
 import { useSession, orgClient } from "@/lib/auth-client";
-import { useState, Suspense } from "react";
+import { useState, Suspense, useEffect, useRef } from "react";
 import {
   Card,
   CardContent,
@@ -43,7 +43,8 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import { Building2, Users, Download } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { toast } from "sonner";
 
 import { useSubscription } from "@/hooks/use-subscription";
 import { useFeatureGate } from "@/hooks/use-feature-gate";
@@ -102,6 +103,28 @@ function DashboardContent() {
   const [orgSlug, setOrgSlug] = useState("");
   const [isCreatingOrg, setIsCreatingOrg] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const hasShownSuccessToastRef = useRef(false);
+
+  // Handle upgrade success feedback
+  useEffect(() => {
+    const upgradeStatus = searchParams.get("upgrade");
+
+    if (upgradeStatus === "success" && !hasShownSuccessToastRef.current) {
+      // Mark as shown immediately to prevent duplicates
+      hasShownSuccessToastRef.current = true;
+
+      // Show success toast
+      toast.success("Welcome to Pro! Your subscription has been activated.");
+
+      // Clear the URL parameter after a short delay
+      setTimeout(() => {
+        const newUrl = new URL(window.location.href);
+        newUrl.searchParams.delete('upgrade');
+        window.history.replaceState({}, '', newUrl.toString());
+      }, 1000);
+    }
+  }, [searchParams]);
 
   // TODO: Replace with real metrics from your app
   const metrics = getSampleMetrics();

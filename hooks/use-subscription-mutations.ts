@@ -34,8 +34,8 @@ export function useUpgradeSubscription() {
         plan,
         annual,
         referenceId: session.user.id,
-        successUrl: successUrl || `${window.location.origin}/dashboard?upgraded=true`,
-        cancelUrl: cancelUrl || `${window.location.origin}/dashboard/pricing?canceled=true`,
+        successUrl: successUrl || `${window.location.origin}/dashboard?upgrade=success`,
+        cancelUrl: cancelUrl || `${window.location.origin}/dashboard/upgrade`,
       })
 
       if (error) {
