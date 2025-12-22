@@ -18,6 +18,7 @@ import {
   SidebarContent,
   SidebarGroup,
   SidebarGroupContent,
+  SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -88,6 +89,7 @@ export default function DashboardLayout({
 
               {/* Default dashboard navigation */}
               <SidebarGroup>
+                <SidebarGroupLabel>Personal</SidebarGroupLabel>
                 <SidebarGroupContent>
                   <SidebarMenu>
                     <SidebarMenuItem>
@@ -101,79 +103,6 @@ export default function DashboardLayout({
                         </Link>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
-
-                    {/* Organization Section - Single org per user */}
-                    {userOrg && (
-                      <SidebarMenuItem>
-                        <SidebarMenuButton
-                          asChild
-                          isActive={orgContext?.isOrgPage}
-                        >
-                          <Link href={`/dashboard/organizations/${userOrg.id}`}>
-                            <Building2Icon className="h-4 w-4" />
-                            <span>Organization</span>
-                          </Link>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    )}
-
-                    {/* Organization-specific navigation when in org context */}
-                    {orgContext && (
-                      <>
-                        <SidebarMenuItem>
-                          <SidebarMenuButton
-                            asChild
-                            isActive={
-                              pathname ===
-                              `/dashboard/organizations/${orgContext.orgId}/members`
-                            }
-                            className="ml-6"
-                          >
-                            <Link
-                              href={`/dashboard/organizations/${orgContext.orgId}/members`}
-                            >
-                              <Users className="h-3 w-3" />
-                              <span className="text-sm">Members</span>
-                            </Link>
-                          </SidebarMenuButton>
-                        </SidebarMenuItem>
-                        <SidebarMenuItem>
-                          <SidebarMenuButton
-                            asChild
-                            isActive={
-                              pathname ===
-                              `/dashboard/organizations/${orgContext.orgId}/invitations`
-                            }
-                            className="ml-6"
-                          >
-                            <Link
-                              href={`/dashboard/organizations/${orgContext.orgId}/invitations`}
-                            >
-                              <Mail className="h-3 w-3" />
-                              <span className="text-sm">Invitations</span>
-                            </Link>
-                          </SidebarMenuButton>
-                        </SidebarMenuItem>
-                        <SidebarMenuItem>
-                          <SidebarMenuButton
-                            asChild
-                            isActive={
-                              pathname ===
-                              `/dashboard/organizations/${orgContext.orgId}/settings`
-                            }
-                            className="ml-6"
-                          >
-                            <Link
-                              href={`/dashboard/organizations/${orgContext.orgId}/settings`}
-                            >
-                              <SettingsIcon className="h-3 w-3" />
-                              <span className="text-sm">Settings</span>
-                            </Link>
-                          </SidebarMenuButton>
-                        </SidebarMenuItem>
-                      </>
-                    )}
-
                     <SidebarMenuItem>
                       <SidebarMenuButton
                         asChild
@@ -188,6 +117,85 @@ export default function DashboardLayout({
                   </SidebarMenu>
                 </SidebarGroupContent>
               </SidebarGroup>
+              {userOrg && (
+                <SidebarGroup>
+                  <SidebarGroupLabel>Organization</SidebarGroupLabel>
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {/* Organization Section - Single org per user */}
+
+                      <SidebarMenuItem>
+                        <SidebarMenuButton
+                          asChild
+                          isActive={orgContext?.isOrgPage}
+                        >
+                          <Link href={`/dashboard/organizations/${userOrg.id}`}>
+                            <Building2Icon className="h-4 w-4" />
+                            <span>Organization</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+
+                      {/* Organization-specific navigation when in org context */}
+                      {orgContext && (
+                        <>
+                          <SidebarMenuItem>
+                            <SidebarMenuButton
+                              asChild
+                              isActive={
+                                pathname ===
+                                `/dashboard/organizations/${orgContext.orgId}/members`
+                              }
+                              className="ml-6"
+                            >
+                              <Link
+                                href={`/dashboard/organizations/${orgContext.orgId}/members`}
+                              >
+                                <Users className="h-3 w-3" />
+                                <span className="text-sm">Members</span>
+                              </Link>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                          <SidebarMenuItem>
+                            <SidebarMenuButton
+                              asChild
+                              isActive={
+                                pathname ===
+                                `/dashboard/organizations/${orgContext.orgId}/invitations`
+                              }
+                              className="ml-6"
+                            >
+                              <Link
+                                href={`/dashboard/organizations/${orgContext.orgId}/invitations`}
+                              >
+                                <Mail className="h-3 w-3" />
+                                <span className="text-sm">Invitations</span>
+                              </Link>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                          <SidebarMenuItem>
+                            <SidebarMenuButton
+                              asChild
+                              isActive={
+                                pathname ===
+                                `/dashboard/organizations/${orgContext.orgId}/settings`
+                              }
+                              className="ml-6"
+                            >
+                              <Link
+                                href={`/dashboard/organizations/${orgContext.orgId}/settings`}
+                              >
+                                <SettingsIcon className="h-3 w-3" />
+                                <span className="text-sm">Settings</span>
+                              </Link>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        </>
+                      )}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
+              )}
             </SidebarContent>
           </Sidebar>
           <div className="flex flex-1 flex-col">
