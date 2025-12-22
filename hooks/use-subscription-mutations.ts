@@ -1,15 +1,17 @@
 'use client';
 
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useRouter } from 'next/navigation'
 import { useSession } from '@/lib/auth-client'
 import { subscription } from '@/lib/auth-client'
 
 /**
  * Mutation hook for upgrading a subscription
- * Creates a Stripe checkout session and redirects to payment
+ * Creates a Stripe checkout session and navigates to payment
  */
 export function useUpgradeSubscription() {
   const queryClient = useQueryClient()
+  const router = useRouter()
   const { data: session } = useSession()
 
   return useMutation({
@@ -33,7 +35,7 @@ export function useUpgradeSubscription() {
         annual,
         referenceId: session.user.id,
         successUrl: successUrl || `${window.location.origin}/dashboard?upgraded=true`,
-        cancelUrl: cancelUrl || `${window.location.origin}/pricing?canceled=true`,
+        cancelUrl: cancelUrl || `${window.location.origin}/dashboard/pricing?canceled=true`,
       })
 
       if (error) {
@@ -43,17 +45,17 @@ export function useUpgradeSubscription() {
       return data
     },
     onSuccess: (data) => {
-      // Redirect to Stripe checkout
+      // Navigate to Stripe checkout using Next.js router
       if (data?.url) {
-        window.location.href = data.url
+        router.push(data.url)
       }
 
       // Invalidate subscription data after potential redirect back
       queryClient.invalidateQueries({ queryKey: ['subscription'] })
     },
     onError: (error) => {
-      console.error('Upgrade failed:', error)
-      // Error handling is done at the component level
+      // Re-throw error for component-level handling instead of silent console logging
+      throw error
     }
   })
 }
@@ -64,6 +66,7 @@ export function useUpgradeSubscription() {
  */
 export function useCancelSubscription() {
   const queryClient = useQueryClient()
+  const router = useRouter()
   const { data: session } = useSession()
 
   return useMutation({
@@ -88,18 +91,17 @@ export function useCancelSubscription() {
       return data
     },
     onSuccess: (data) => {
-      // Redirect to Stripe billing portal
+      // Navigate to Stripe billing portal using Next.js router
       if (data?.url) {
-        window.location.href = data.url
+        router.push(data.url)
       }
 
       // Invalidate subscription data after potential changes
       queryClient.invalidateQueries({ queryKey: ['subscription'] })
     },
     onError: (error) => {
-      console.error('Cancellation failed:', error)
-      // Error handling is done at the component level
+      // Re-throw error for component-level handling instead of silent console logging
+      throw error
     }
   })
 }
-

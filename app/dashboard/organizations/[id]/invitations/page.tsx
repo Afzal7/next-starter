@@ -15,6 +15,9 @@ import { LoadingSkeleton } from '@/components/shared/loading-skeleton';
 import { ErrorState } from '@/components/shared/error-state';
 import { toast } from 'sonner';
 import { useOrganizationInvitations, useInviteMember, useCancelInvitation, useResendInvitation } from '@/hooks/use-organization-invitations';
+import { useOrganizationMembers } from '@/hooks/use-organization-members';
+import { useSession } from '@/lib/auth-client';
+import type { Member } from 'better-auth/plugins/organization';
 
 
 export default function OrganizationInvitationsPage() {
@@ -22,7 +25,9 @@ export default function OrganizationInvitationsPage() {
   const orgId = params.id as string;
 
   // Use new TanStack Query hooks
+  const { data: session } = useSession();
   const { data: orgData, isLoading, error } = useOrganizationInvitations(orgId);
+  const { data: memberData } = useOrganizationMembers(orgId);
   const inviteMemberMutation = useInviteMember();
   const cancelInvitationMutation = useCancelInvitation();
   const resendInvitationMutation = useResendInvitation();
@@ -30,11 +35,18 @@ export default function OrganizationInvitationsPage() {
   // Extract data from query result
   const organization = orgData || null;
   const invitations = orgData?.invitations || [];
+  const members = memberData?.members || [];
+
+  // Find current user's membership
+  const currentMember = members.find((m: Member) => m.userId === session?.user?.id);
+
+  // Check if current user can invite members (owners and admins)
+  const canInviteMembers = currentMember?.role === 'owner' || currentMember?.role === 'admin';
 
   // Local state for UI
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<'member' | 'admin'>('member');
+  const [inviteRole, setInviteRole] = useState<'member' | 'admin' | 'owner'>('member');
   const [inviteError, setInviteError] = useState<string | null>(null);
 
   const handleCancelInvitation = (invitationId: string) => {
@@ -74,6 +86,13 @@ export default function OrganizationInvitationsPage() {
 
   const handleSendInvitation = () => {
     if (!inviteEmail.trim() || !organization) return;
+
+     // Check if current user has permission to send invitations
+     if (!canInviteMembers) {
+       toast.warning('You do not have permission to send invitations.');
+       setInviteError('Insufficient permissions to send invitations.');
+       return;
+     }
 
     setInviteError(null);
     inviteMemberMutation.mutate(
@@ -133,10 +152,12 @@ export default function OrganizationInvitationsPage() {
         <div className="flex items-center space-x-2">
           <Badge variant="outline">{pendingInvitations.length} pending</Badge>
         </div>
-        <Button onClick={() => setShowInviteModal(true)}>
-          <UserPlus className="h-4 w-4 mr-2" />
-          Invite Member
-        </Button>
+        {canInviteMembers && (
+          <Button onClick={() => setShowInviteModal(true)}>
+            <UserPlus className="h-4 w-4 mr-2" />
+            Invite Member
+          </Button>
+        )}
       </div>
 
       <Card>
@@ -247,7 +268,7 @@ export default function OrganizationInvitationsPage() {
               <Label htmlFor="role">Role</Label>
               <Select
                 value={inviteRole}
-                onValueChange={(value) => setInviteRole(value as 'member' | 'admin')}
+                onValueChange={(value) => setInviteRole(value as 'member' | 'admin' | 'owner')}
                 disabled={inviteMemberMutation.isPending}
               >
                 <SelectTrigger id="role">
@@ -256,6 +277,9 @@ export default function OrganizationInvitationsPage() {
                 <SelectContent>
                   <SelectItem value="member">Member</SelectItem>
                   <SelectItem value="admin">Admin</SelectItem>
+                  {canInviteMembers && (
+                    <SelectItem value="owner">Owner</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
               <p className="text-sm text-muted-foreground">

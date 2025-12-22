@@ -29,7 +29,8 @@ import { LoadingSkeleton } from "@/components/shared/loading-skeleton";
 import { ErrorState } from "@/components/shared/error-state";
 import { toast } from "sonner";
 import { useOrganizationMembers } from "@/hooks/use-organization-members";
-import { useUpdateOrganization, useDeleteOrganization } from "@/hooks/use-organization-crud";
+import { useUpdateOrganization, useDeleteOrganization, useLeaveOrganization } from "@/hooks/use-organization-crud";
+import { useSession } from "@/lib/auth-client";
 
 export default function OrganizationSettingsPage() {
   const params = useParams();
@@ -37,15 +38,22 @@ export default function OrganizationSettingsPage() {
   const orgId = params.id as string;
 
   // Use new TanStack Query hooks
+  const { data: session } = useSession();
   const { data: orgData, isLoading, error } = useOrganizationMembers(orgId);
   const updateOrgMutation = useUpdateOrganization();
   const deleteOrgMutation = useDeleteOrganization();
+  const leaveOrgMutation = useLeaveOrganization();
 
 
   // Extract data from query result
   const organization = orgData || null;
   const members = orgData?.members || [];
-  const currentMember = members.find(m => m.role === 'owner' || m.role === 'admin'); // Simplified
+  const currentMember = members.find(m => m.userId === session?.user?.id);
+
+  // Check permissions based on role
+  const canEdit = currentMember?.role === "owner";
+  const canDelete = currentMember?.role === "owner";
+  const canLeave = !!currentMember; // All members can leave
 
   // Local state for form
   const [name, setName] = useState(organization?.name || "");
@@ -118,26 +126,48 @@ export default function OrganizationSettingsPage() {
     );
   };
 
+  const handleLeaveOrganization = () => {
+    if (!organization) return;
+
+    leaveOrgMutation.mutate(
+      { organizationId: organization.id },
+      {
+        onSuccess: () => {
+          toast.success("You have left the organization");
+          router.push("/dashboard");
+        },
+        onError: (error) => {
+          console.error("Failed to leave organization:", error);
+          toast.warning("Failed to leave organization. Please try again.");
+        },
+      }
+    );
+  };
+
 
 
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <LoadingSkeleton type="card" />
+        <LoadingSkeleton type="form" />
       </div>
     );
   }
 
-  if (error) {
-    return <ErrorState message={error.message} />;
+  if (error || !organization || !currentMember) {
+    return (
+      <div className="space-y-6">
+        <ErrorState
+          message={error?.message || 'This organization may not exist or you may not have access.'}
+          type="page"
+          onRetry={() => window.location.reload()}
+          retryLabel="Try Again"
+        />
+      </div>
+    );
   }
 
-  if (!organization || !currentMember) {
-    return <ErrorState message="Organization not found" />;
-  }
 
-  const canEdit = currentMember.role === "owner";
-  const canDelete = currentMember.role === "owner";
 
   return (
     <div className="space-y-6">
@@ -158,7 +188,7 @@ export default function OrganizationSettingsPage() {
               General Settings
             </CardTitle>
             <CardDescription>
-              Update your organization information
+              {canEdit ? "Update your organization information" : "View organization information"}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -184,10 +214,6 @@ export default function OrganizationSettingsPage() {
                 Auto-generated from organization name. Used in URLs and cannot contain spaces or special characters.
               </p>
             </div>
-
-
-
-
 
             {canEdit && (
               <Button
@@ -239,6 +265,42 @@ export default function OrganizationSettingsPage() {
                       disabled={deleteOrgMutation.isPending}
                     >
                       {deleteOrgMutation.isPending ? "Deleting..." : "Delete Organization"}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </CardContent>
+          </Card>
+        )}
+
+        {canLeave && (
+          <Card className="border-destructive/50">
+            <CardHeader>
+              <CardTitle className="text-destructive">Leave Organization</CardTitle>
+              <CardDescription>Remove yourself from this organization</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="destructive">
+                    Leave Organization
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Leave Organization</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Are you sure you want to leave {organization?.name}? You will lose access to all organization resources and projects.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={handleLeaveOrganization}
+                      disabled={leaveOrgMutation.isPending}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                      {leaveOrgMutation.isPending ? "Leaving..." : "Leave Organization"}
                     </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>

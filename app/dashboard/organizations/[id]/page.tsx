@@ -5,14 +5,13 @@ import { useParams, useRouter } from 'next/navigation';
 import { useSession } from '@/lib/auth-client';
 import { orgClient } from '@/lib/auth-client';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Users, Mail, Settings, Crown, Info } from 'lucide-react';
 import { LoadingSkeleton } from '@/components/shared/loading-skeleton';
 import { ErrorState } from '@/components/shared/error-state';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { toast } from 'sonner';
+
 import { useFeatureGate } from '@/hooks/use-feature-gate';
 import type { Organization, Member } from 'better-auth/plugins/organization';
 
@@ -62,16 +61,7 @@ export default function OrganizationPage() {
     fetchOrganizationData();
   }, [session?.user?.id, session?.user, orgId]);
 
-  const handleLeaveOrganization = async () => {
-    try {
-      await orgClient.leave({ organizationId: orgId });
-      toast.success('You have left the organization');
-      router.push('/dashboard');
-    } catch (error) {
-      console.error('Failed to leave organization:', error);
-      toast.warning('Failed to leave organization. Please try again.');
-    }
-  };
+
 
   if (isLoading) {
     return <LoadingSkeleton type="page" count={4} />;
@@ -177,40 +167,7 @@ export default function OrganizationPage() {
         </Alert>
       )}
 
-      {currentMember && currentMember.role !== 'owner' && (
-        <Card className="border-destructive/50">
-          <CardHeader>
-            <CardTitle className="text-destructive">Leave Organization</CardTitle>
-            <CardDescription>Remove yourself from this organization</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="destructive">
-                  Leave Organization
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Leave Organization</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Are you sure you want to leave {organization?.name}? You will lose access to all organization resources and projects.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={handleLeaveOrganization}
-                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                  >
-                    Leave Organization
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          </CardContent>
-        </Card>
-      )}
+
     </div>
   );
 }

@@ -56,10 +56,11 @@ function generateBreadcrumbs(
     } else if (segments[1] === "settings") {
       // /dashboard/settings
       breadcrumbs.push({ label: "Settings", isCurrent: true });
-    } else if (segments[1] === "organizations" && orgContext && userOrg) {
+    } else if (segments[1] === "organizations" && orgContext) {
       // Organization routes
+      const orgName = userOrg?.name || "Organization";
       breadcrumbs.push({
-        label: userOrg.name,
+        label: orgName,
         href: `/dashboard/organizations/${orgContext.orgId}`,
       });
 
